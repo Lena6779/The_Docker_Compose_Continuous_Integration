@@ -1,0 +1,72 @@
+name: RAG Application CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+    # job 1: Run python tests
+    test:
+        runs-on: ubuntu-latest
+        defaults:
+            run:
+                working-directory: ./backend # Run commands from backend
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up Python 3.11
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+
+            - name: Install dependencies
+              run: |
+                python -m pip install --upgrade pip
+                pip install -r requirements.txt
+                pip install pytest httpx # Test dependencies
+
+            - name: Run tests
+              run: python -m pytest tests/ -v --tb=short
+              env:
+                OLLAMA_URL: http://localhost:11434 # won't actually connect in CI
+                CHROMA_PATH: ./test_chroma
+
+    # job 2: verify docker builds
+    docker:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Build backend image
+              run: docker build -t rag-backend ./backend
+
+            - name: Build frontend image
+              run: docker build -t rag-frontend ./frontend
+
+            - name: Verify Docker images exist
+              run: |
+                docker image inspect rag-backend
+                docker image inspect rag-frontend
+
+    # job 3: Lint (CODE QUALITY)
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Set up python
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+
+            - name: Check code for formatting
+              run: |
+                pip install ruff
+                ruff check backend/ frontend/

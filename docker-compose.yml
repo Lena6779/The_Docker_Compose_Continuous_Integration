@@ -1,0 +1,48 @@
+# Complete RAG stack: Streamlit frontend -> FastAPI backend -> Ollama LLM
+# Compose puts all services on one private network, where each service
+# name (backend, frontend, ollama) works as a hostname
+
+services:
+  # FastAPI RAG API (retrieval with ChromaDB, generation with Ollama)
+  backend:
+    build: ./backend                 # build the image from backend/Dockerfile
+    ports:
+      - "8000:8000"                  # host:container, so http://localhost:8000 works in the browser
+    env_file: .env                   # load settings (OLLAMA_URL, MODEL_NAME, etc.) into the container
+    depends_on:
+      - ollama                       # start the Ollama container before the backend
+    volumes:
+      - chroma_data:/app/chroma_data # named volume keeps the ChromaDB data after restarts
+    # Docker calls /health every 30s to check that the API is actually working
+    # Uses Python because the slim image does not include curl
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s              # give the API time to start before failures count
+
+  # Streamlit user interface
+  frontend:
+    build: ./frontend                # build the image from frontend/Dockerfile
+    ports:
+      - "8501:8501"                  # open http://localhost:8501 in the browser
+    environment:
+      - API_URL=http://backend:8000  # "backend" is the service name, not localhost
+    depends_on:
+      backend:
+        condition: service_healthy   # wait until the backend passes its healthcheck
+
+  # Ollama LLM server (prebuilt image, no Dockerfile needed)
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"                # optional; lets you call Ollama from the host too
+    volumes:
+      - ollama_data:/root/.ollama    # keeps downloaded models so they are only pulled once
+
+# Named volumes are managed by Docker and persist after "docker compose down"
+# (only "docker compose down -v" removes them)
+volumes:
+  chroma_data:
+  ollama_data:
