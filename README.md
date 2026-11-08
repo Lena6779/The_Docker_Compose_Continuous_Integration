@@ -1,4 +1,4 @@
-# The Complete Docker Compose: RAG Stack
+# The Complete Docker Compose: RAG Stack with CI
 
 A complete Retrieval-Augmented Generation (RAG) application that runs entirely in Docker with one command. Ask questions about your documents in a Streamlit web interface and get answers from a local LLM, with source citations showing exactly where each answer came from.
 
@@ -22,14 +22,19 @@ All services share a private Docker network created by Compose, where each **ser
 ## Project Structure
 
 ```
-The_Complete_Docker_Compose/
+The_Complete_Docker_Compose_CI/
+├── .github/
+│   └── workflows/
+│       └── ci.yml         # GitHub Actions CI workflow
 ├── backend/
 │   ├── docs/                  # Documents to index (.txt / .md)
 │   ├── .dockerignore
 │   ├── config.py              # Settings loaded from environment variables
 │   ├── Dockerfile
 │   ├── main.py                # FastAPI RAG API
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── tests/
+│       └── test_api.py    # API tests
 ├── frontend/
 │   ├── app.py                 # Streamlit UI
 │   ├── Dockerfile
@@ -87,6 +92,7 @@ The model is saved in the `ollama_data` volume, so it only needs to be pulled on
 |--------|--------------|----------------------------------------------------------------|
 | GET    | `/health`    | API status, Ollama connection, and number of indexed chunks    |
 | GET    | `/`          | Confirms the API is running and shows the model name           |
+| GET    | `/stats`     | Number of indexed chunks, returned as `document_count`         |
 | POST   | `/reindex`   | Clears the collection and re-indexes all files in `docs/`      |
 | POST   | `/documents` | Adds a single document: `{"text": "..."}`                      |
 | POST   | `/ask`       | Answers a question: `{"question": "..."}`, returns answer + sources |
@@ -126,6 +132,16 @@ Changes to files in `docs/` require a rebuild (`docker compose up --build`) beca
 - **The first question is slower** because Ollama loads the model into memory. After about 5 minutes of inactivity the model is unloaded and reloaded on the next question.
 - **The similarity threshold matters.** With `CONFIDENCE_THRESHOLD=1.0`, weakly related chunks (distances around 0.65–0.75) still reach the model. For example, asking *"What is an API?"* returned one strong match (0.47) and four weak ones, and the model blended them into an answer that reversed which service sends requests to which. Lowering the threshold (e.g. to `0.6`) keeps only strong matches and gives the model cleaner context.
 - **Small models trade accuracy for speed.** `llama3.2:1b` runs well on a CPU, but sometimes answers from general knowledge instead of saying "I don't know" when the context does not contain the answer.
+
+## Continuous Integration
+
+GitHub Actions runs `.github/workflows/ci.yml` on every push and pull request to `main`:
+
+- **test:** runs the API tests in `backend/tests/` with pytest
+- **docker:** builds the backend and frontend images and verifies they exist
+- **lint:** checks the Python code with `ruff`
+
+Results appear in the repository's **Actions** tab.
 
 ## Useful Commands
 
