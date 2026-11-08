@@ -45,7 +45,7 @@ def health():
         "documents": collection.count(),
     }
 
-
+# Stats endpoint: reports how many documents are stored
 @app.get("/stats")
 def stats():
     return {"document_count": collection.count()}
